@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ENDLE — Daily Arknights Endfield Guessing Game</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <!-- Main Menu -->
+    <main id="main-menu" class="screen active">
+      <header class="header">
+        <button class="icon-btn settings-btn" id="settings-btn" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <div class="title-block">
+          <h1 class="logo" data-i18n="title">ENDLE</h1>
+          <p class="subtitle" data-i18n="subtitle">A DAILY ARKNIGHTS ENDFIELD WORDLE</p>
+          <p class="main-menu-daily" id="main-daily-date"></p>
+        </div>
+      </header>
+
+      <section class="gamemodes">
+        <h2 class="gamemodes-title" data-i18n="chooseGamemode">Choose a gamemode</h2>
+        <div class="gamemode-list">
+          <button class="gamemode-btn" data-mode="operators">
+            <span class="gamemode-icon">◆</span>
+            <div class="gamemode-text">
+              <span class="gamemode-name" data-i18n="operators">Operators</span>
+              <span class="gamemode-desc" data-i18n="operatorsDesc">Discover today's Arknights Endfield operator</span>
+            </div>
+          </button>
+          <button class="gamemode-btn" data-mode="weapons">
+            <span class="gamemode-icon">▸</span>
+            <div class="gamemode-text">
+              <span class="gamemode-name" data-i18n="weapons">Weapons</span>
+              <span class="gamemode-desc" data-i18n="weaponsDesc">Guess the weapon type of today</span>
+            </div>
+          </button>
+          <button class="gamemode-btn" data-mode="archive">
+            <span class="gamemode-icon">◈</span>
+            <div class="gamemode-text">
+              <span class="gamemode-name" data-i18n="archive">Archive</span>
+              <span class="gamemode-desc" data-i18n="archiveDesc">Track your progress and start collecting! Filter what you've uncovered.</span>
+            </div>
+          </button>
+        </div>
+        <button class="secondary-btn" id="more-games-btn">
+          <span class="gamemode-icon">⧉</span>
+          <span data-i18n="moreGames">More Games</span>
+        </button>
+      </section>
+    </main>
+
+    <!-- Game Screen -->
+    <main id="game-screen" class="screen">
+      <header class="game-header">
+        <button class="back-btn" id="back-btn" data-i18n="back">← Back</button>
+        <div class="game-header-center">
+          <h1 class="game-title" id="game-title">Operators</h1>
+          <div class="daily-info">
+            <span class="daily-date" id="daily-date"></span>
+            <span class="player-count" id="player-count" title="Players who completed today's daily challenge">
+              <span class="player-count-num" id="player-count-num">—</span> <span data-i18n="completedToday">completed today</span>
+            </span>
+          </div>
+        </div>
+        <button class="icon-btn" id="game-settings-btn" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+      </header>
+      <div class="game-content" id="game-content">
+        <!-- Operators game -->
+        <div id="operators-game" class="game-panel hidden">
+          <div class="guess-area guess-area-with-autocomplete">
+            <div class="input-wrapper">
+              <input type="text" id="operator-input" class="guess-input" data-i18n-placeholder="typeOperatorName" placeholder="Type operator name..." autocomplete="off" maxlength="20">
+              <div class="autocomplete-dropdown" id="operator-autocomplete"></div>
+            </div>
+            <button class="guess-btn" id="operator-guess-btn" data-i18n="guess">Guess</button>
+            <button class="hint-btn" id="operator-hint-btn" title="Reveal a hint">💡 Hint</button>
+          </div>
+          <div class="revealed-hints" id="operator-revealed-hints"></div>
+          <div class="hints-area" id="operator-hints"></div>
+          <div class="result-area hidden" id="operator-result"></div>
+        </div>
+        <!-- Weapons game -->
+        <div id="weapons-game" class="game-panel hidden">
+          <div class="guess-area guess-area-with-autocomplete">
+            <div class="input-wrapper">
+              <input type="text" id="weapon-input" class="guess-input" data-i18n-placeholder="typeWeapon" placeholder="Type weapon type..." autocomplete="off">
+              <div class="autocomplete-dropdown" id="weapon-autocomplete"></div>
+            </div>
+            <button class="guess-btn" id="weapon-guess-btn">Guess</button>
+            <button class="hint-btn" id="weapon-hint-btn" title="Reveal a hint">💡 Hint</button>
+          </div>
+          <div class="revealed-hints" id="weapon-revealed-hints"></div>
+          <div class="hints-area" id="weapon-hints"></div>
+          <div class="result-area hidden" id="weapon-result"></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Archive Screen -->
+    <main id="archive-screen" class="screen">
+      <header class="game-header">
+        <button class="back-btn" id="archive-back-btn" data-i18n="back">← Back</button>
+        <h1 class="game-title" data-i18n="archive">Archive</h1>
+      </header>
+      <div class="archive-content">
+        <div class="archive-filters">
+          <button class="filter-btn active" data-filter="all" data-i18n="all">All</button>
+          <button class="filter-btn" data-filter="operators" data-i18n="operators">Operators</button>
+          <button class="filter-btn" data-filter="weapons" data-i18n="weapons">Weapons</button>
+        </div>
+        <div class="archive-grid" id="archive-grid"></div>
+      </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2 data-i18n="settings">Settings</h2>
+        <div class="settings-option settings-option-block">
+          <label><span data-i18n="language">Language</span></label>
+          <select id="language-select" class="language-select">
+            <option value="en">English</option>
+            <option value="ru">Русский</option>
+          </select>
+        </div>
+        <div class="settings-option">
+          <label>
+            <input type="checkbox" id="hard-mode" checked>
+            <span data-i18n="hardMode">Hard mode (strict matching)</span>
+          </label>
+        </div>
+        <button class="modal-close" id="modal-close" data-i18n="close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="data/game-data.js"></script>
+  <script src="data/operator-images.js"></script>
+  <script src="data/attribute-images.js"></script>
+  <script src="data/translations.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
