@@ -5,7 +5,7 @@ const Game = {
   dailyAnswer: null,
   guesses: [],
   maxGuesses: 8,
-  hardMode: true,
+  wrongAttempts: 0, // Для emoji game
 
   // Seeded random for daily consistency
   getDailySeed() {
@@ -31,10 +31,14 @@ const Game = {
     return GAME_DATA.operators[idx];
   },
 
-  getDailyWeapon() {
+
+
+  getDailyEmojiCharacter() {
+    const characters = getEmojiCharacters();
+    if (characters.length === 0) return null;
     const seed = this.getDailySeed();
-    const idx = this.seededRandom(seed, GAME_DATA.weapons.length);
-    return GAME_DATA.weapons[idx];
+    const idx = this.seededRandom(seed, characters.length);
+    return characters[idx];
   },
 
   normalize(str) {
@@ -43,7 +47,26 @@ const Game = {
 
   findOperator(name) {
     const normalized = this.normalize(name);
-    return GAME_DATA.operators.find(op => this.normalize(op.name) === normalized);
+    return GAME_DATA.operators.find(op => 
+      this.normalize(op.name) === normalized || 
+      (op.nameRu && this.normalize(op.nameRu) === normalized)
+    );
+  },
+
+  findEmojiCharacter(name) {
+    const normalized = this.normalize(name);
+    const characters = getEmojiCharacters();
+    return characters.find(char => 
+      this.normalize(char.name) === normalized || 
+      (char.nameRu && this.normalize(char.nameRu) === normalized)
+    );
+  },
+
+  getDisplayName(operator, lang) {
+    if (lang === 'ru' && operator.nameRu) {
+      return operator.nameRu;
+    }
+    return operator.name;
   },
 
   checkOperatorGuess(guess) {
@@ -65,31 +88,58 @@ const Game = {
     return result;
   },
 
-  checkWeaponGuess(guess) {
-    const normalized = this.normalize(guess);
-    const found = GAME_DATA.weapons.find(w => this.normalize(w) === normalized);
-    if (!found) return { valid: false };
 
-    return {
-      valid: true,
-      correct: found === this.dailyAnswer,
-      data: found,
-    };
-  },
 
-  getOperatorSuggestions(partial) {
+  getOperatorSuggestions(partial, lang) {
     if (!partial || partial.length < 1) return [];
     const norm = this.normalize(partial);
-    const startsWith = GAME_DATA.operators.filter(op => this.normalize(op.name).startsWith(norm));
-    const contains = GAME_DATA.operators.filter(op => this.normalize(op.name).includes(norm) && !this.normalize(op.name).startsWith(norm));
-    return [...startsWith, ...contains].map(op => op.name).slice(0, 8);
+    
+    const matches = GAME_DATA.operators.filter(op => {
+      const nameMatch = this.normalize(op.name).includes(norm);
+      const nameRuMatch = op.nameRu && this.normalize(op.nameRu).includes(norm);
+      return nameMatch || nameRuMatch;
+    });
+    
+    const startsWith = matches.filter(op => {
+      const nameStarts = this.normalize(op.name).startsWith(norm);
+      const nameRuStarts = op.nameRu && this.normalize(op.nameRu).startsWith(norm);
+      return nameStarts || nameRuStarts;
+    });
+    
+    const contains = matches.filter(op => {
+      const nameStarts = this.normalize(op.name).startsWith(norm);
+      const nameRuStarts = op.nameRu && this.normalize(op.nameRu).startsWith(norm);
+      return !nameStarts && !nameRuStarts;
+    });
+    
+    return [...startsWith, ...contains].slice(0, 8);
   },
 
-  getWeaponSuggestions(partial) {
+
+
+  getEmojiCharacterSuggestions(partial, lang) {
     if (!partial || partial.length < 1) return [];
+    const characters = getEmojiCharacters();
     const norm = this.normalize(partial);
-    const startsWith = GAME_DATA.weapons.filter(w => this.normalize(w).startsWith(norm));
-    const contains = GAME_DATA.weapons.filter(w => this.normalize(w).includes(norm) && !this.normalize(w).startsWith(norm));
+    
+    const matches = characters.filter(c => {
+      const nameMatch = this.normalize(c.name).includes(norm);
+      const nameRuMatch = c.nameRu && this.normalize(c.nameRu).includes(norm);
+      return nameMatch || nameRuMatch;
+    });
+    
+    const startsWith = matches.filter(c => {
+      const nameStarts = this.normalize(c.name).startsWith(norm);
+      const nameRuStarts = c.nameRu && this.normalize(c.nameRu).startsWith(norm);
+      return nameStarts || nameRuStarts;
+    });
+    
+    const contains = matches.filter(c => {
+      const nameStarts = this.normalize(c.name).startsWith(norm);
+      const nameRuStarts = c.nameRu && this.normalize(c.nameRu).startsWith(norm);
+      return !nameStarts && !nameRuStarts;
+    });
+    
     return [...startsWith, ...contains].slice(0, 8);
   },
 
@@ -125,10 +175,11 @@ const Game = {
   },
 
   // Progressive hints (one at a time)
-  getOperatorHints() {
+  getOperatorHints(lang) {
     const a = this.dailyAnswer;
+    const displayName = this.getDisplayName(a, lang);
     return [
-      { labelKey: 'hintFirstLetter', value: a.name.charAt(0).toUpperCase() },
+      { labelKey: 'hintFirstLetter', value: displayName.charAt(0).toUpperCase() },
       { labelKey: 'hintClass', value: a.class },
       { labelKey: 'hintRarity', value: `${a.rarity}★` },
       { labelKey: 'hintWeapon', value: a.weapon },
@@ -136,11 +187,5 @@ const Game = {
     ];
   },
 
-  getWeaponHints() {
-    const a = this.dailyAnswer;
-    return [
-      { labelKey: 'hintFirstLetter', value: a.charAt(0).toUpperCase() },
-      { labelKey: 'hintLength', value: `${a.length} letters` },
-    ];
-  },
+
 };

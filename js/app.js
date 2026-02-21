@@ -22,20 +22,29 @@ const API = {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   },
   async getPlayerCount() {
+    const dateKey = this.getDateKey();
     try {
-      const res = await fetch(`https://api.countapi.xyz/get/${this.namespace}/daily-${this.getDateKey()}`);
-      const data = await res.json();
-      if (data.value !== undefined) return data.value;
-      return 0;
+      const [opRes, emojiRes] = await Promise.all([
+        fetch(`https://api.countapi.xyz/get/${this.namespace}/operators-${dateKey}`),
+        fetch(`https://api.countapi.xyz/get/${this.namespace}/emoji-${dateKey}`)
+      ]);
+      const opData = await opRes.json();
+      const emojiData = await emojiRes.json();
+      return {
+        operators: (opData.value !== undefined ? opData.value : 0),
+        emoji: (emojiData.value !== undefined ? emojiData.value : 0)
+      };
     } catch {
       return null;
     }
   },
-  async incrementPlayerCount() {
-    const key = `endle_reported_${this.getDateKey()}`;
-    if (localStorage.getItem(key)) return null; // Already reported today
+  async incrementPlayerCount(mode) {
+    if (mode !== 'operators' && mode !== 'emoji') return null;
+    const dateKey = this.getDateKey();
+    const key = `endle_reported_${mode}_${dateKey}`;
+    if (localStorage.getItem(key)) return null; // Already reported today for this mode
     try {
-      const res = await fetch(`https://api.countapi.xyz/hit/${this.namespace}/daily-${this.getDateKey()}`);
+      const res = await fetch(`https://api.countapi.xyz/hit/${this.namespace}/${mode}-${dateKey}`);
       const data = await res.json();
       localStorage.setItem(key, '1');
       return data.value ?? null;
@@ -75,10 +84,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target === settingsModal) closeSettings();
   });
 
-  document.getElementById('hard-mode').addEventListener('change', (e) => {
-    Game.hardMode = e.target.checked;
-  });
-
   const langSelect = document.getElementById('language-select');
   if (langSelect) {
     langSelect.value = currentLang;
@@ -110,10 +115,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function updatePlayerCount() {
-    const numEl = document.getElementById('player-count-num');
-    numEl.textContent = '…';
-    const count = await API.getPlayerCount();
-    numEl.textContent = count !== null ? count.toLocaleString() : '—';
+    const container = document.getElementById('player-count');
+    if (!container) return;
+    container.innerHTML = '<span class="player-count-loading">…</span>';
+    const counts = await API.getPlayerCount();
+    const t = LANG[currentLang] || LANG.en;
+    if (counts === null) {
+      container.innerHTML = '<span data-i18n="completedToday">completed today</span>';
+      applyTranslations();
+      return;
+    }
+    const op = counts.operators.toLocaleString();
+    const em = counts.emoji.toLocaleString();
+    container.innerHTML = `<span class="player-count-num">${op}</span> ${t.operators}, <span class="player-count-num">${em}</span> ${t.emoji} <span data-i18n="completedToday">completed today</span>`;
+    applyTranslations();
   }
 
   function openSettings() {
@@ -132,10 +147,11 @@ document.addEventListener('DOMContentLoaded', () => {
     gameScreen.classList.add('active');
 
     document.querySelectorAll('.game-panel').forEach(p => p.classList.add('hidden'));
-    const panel = document.getElementById(`${mode}-game`);
+    const panelId = mode === 'weapons' ? 'operators-game' : `${mode}-game`;
+    const panel = document.getElementById(panelId);
     if (panel) panel.classList.remove('hidden');
 
-    const modeNames = { operators: 'operators', weapons: 'weapons' };
+    const modeNames = { operators: 'operators', emoji: 'emoji', weapons: 'Weapons' };
     const t = LANG[currentLang] || LANG.en;
     document.getElementById('game-title').textContent = t[modeNames[mode]] || mode.charAt(0).toUpperCase() + mode.slice(1);
 
@@ -156,8 +172,11 @@ document.addEventListener('DOMContentLoaded', () => {
         initOperatorsGame();
         break;
       case 'weapons':
-        Game.dailyAnswer = Game.getDailyWeapon();
-        initWeaponsGame();
+        Game.dailyAnswer = Game.getDailyOperator();
+        initOperatorsGame();
+        break;
+      case 'emoji':
+        initEmojiGame();
         break;
     }
   }
@@ -185,16 +204,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedIdx = -1;
     function showAutocomplete() {
       const val = input.value.trim();
-      const suggestions = Game.getOperatorSuggestions(val);
+      const suggestions = Game.getOperatorSuggestions(val, currentLang);
       if (suggestions.length === 0) {
         autocompleteEl.classList.add('hidden');
         return;
       }
-      const getImg = (name) => typeof getOperatorImageUrl === 'function' ? getOperatorImageUrl(name) : null;
-      autocompleteEl.innerHTML = suggestions.map((name, i) => {
-        const img = getImg(name);
+      autocompleteEl.innerHTML = suggestions.map((op, i) => {
+        const displayName = Game.getDisplayName(op, currentLang);
+        const img = typeof getOperatorImageUrl === 'function' ? getOperatorImageUrl(op.name) : null;
         const imgHtml = img ? `<img class="autocomplete-portrait" src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
-        return `<div class="autocomplete-item ${i === selectedIdx ? 'selected' : ''}" data-name="${name}">${imgHtml}<span>${name}</span></div>`;
+        return `<div class="autocomplete-item ${i === selectedIdx ? 'selected' : ''}" data-name="${displayName}">${imgHtml}<span>${displayName}</span></div>`;
       }).join('');
       autocompleteEl.classList.remove('hidden');
       autocompleteEl.querySelectorAll('.autocomplete-item').forEach((el, i) => {
@@ -208,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     hintBtn.onclick = () => {
-      const hints = Game.getOperatorHints();
+      const hints = Game.getOperatorHints(currentLang);
       if (Game.hintIndex >= hints.length) return;
       const h = hints[Game.hintIndex++];
       const t = LANG[currentLang] || LANG.en;
@@ -316,7 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rarityStatus = h.rarity === 'correct' ? 'correct' : (h.rarity === 'higher' || h.rarity === 'lower' ? 'wrong' : 'correct');
 
     const opImg = typeof getOperatorImageUrl === 'function' ? getOperatorImageUrl(result.data.name) : null;
-    let cardsHtml = attrCard(t('operator'), result.data.name, 'neutral', '', opImg, null, null);
+    const displayName = Game.getDisplayName(result.data, currentLang);
+    let cardsHtml = attrCard(t('operator'), displayName, 'neutral', '', opImg, null, null);
     if (result.correct) {
       cardsHtml += attrCard(t('class'), result.data.class, 'correct', '', null, 'class', result.data.class);
       cardsHtml += attrCard(t('weapon'), result.data.weapon, 'correct', '', null, 'weapon', result.data.weapon);
@@ -333,123 +353,10 @@ document.addEventListener('DOMContentLoaded', () => {
     hintsEl.appendChild(row);
   }
 
-  // Weapons Game
-  function initWeaponsGame() {
-    const hintsEl = document.getElementById('weapon-hints');
-    const revealedEl = document.getElementById('weapon-revealed-hints');
-    const resultEl = document.getElementById('weapon-result');
-    const input = document.getElementById('weapon-input');
-    const guessBtn = document.getElementById('weapon-guess-btn');
-    const hintBtn = document.getElementById('weapon-hint-btn');
-    const autocompleteEl = document.getElementById('weapon-autocomplete');
 
-    hintsEl.innerHTML = '';
-    revealedEl.innerHTML = '';
-    resultEl.classList.add('hidden');
-    input.value = '';
-    input.disabled = false;
-    guessBtn.disabled = false;
-    hintBtn.disabled = false;
-    Game.hintIndex = 0;
-
-    let selectedIdx = -1;
-    function showAutocomplete() {
-      const val = input.value.trim();
-      const suggestions = Game.getWeaponSuggestions(val);
-      if (suggestions.length === 0) {
-        autocompleteEl.classList.add('hidden');
-        return;
-      }
-      autocompleteEl.innerHTML = suggestions.map((name, i) =>
-        `<div class="autocomplete-item ${i === selectedIdx ? 'selected' : ''}" data-name="${name}">${name}</div>`
-      ).join('');
-      autocompleteEl.classList.remove('hidden');
-      autocompleteEl.querySelectorAll('.autocomplete-item').forEach((el) => {
-        el.onclick = () => { input.value = el.dataset.name; hideAutocomplete(); doGuess(); };
-      });
-    }
-    function hideAutocomplete() {
-      autocompleteEl.classList.add('hidden');
-      autocompleteEl.innerHTML = '';
-      selectedIdx = -1;
-    }
-
-    hintBtn.onclick = () => {
-      const hints = Game.getWeaponHints();
-      if (Game.hintIndex >= hints.length) return;
-      const h = hints[Game.hintIndex++];
-      const t = LANG[currentLang] || LANG.en;
-      const label = t[h.labelKey] || h.labelKey;
-      const div = document.createElement('div');
-      div.className = 'revealed-hint';
-      div.textContent = `${label}: ${h.value}`;
-      revealedEl.appendChild(div);
-      if (Game.hintIndex >= hints.length) hintBtn.disabled = true;
-    };
-
-    const doGuess = () => {
-      const guess = input.value.trim();
-      if (!guess) return;
-
-      const result = Game.checkWeaponGuess(guess);
-      if (!result.valid) {
-        alert((LANG[currentLang] || LANG.en).unknownWeapon || 'Unknown weapon.');
-        return;
-      }
-
-      Game.guesses.push(result);
-      const row = document.createElement('div');
-      row.className = 'guess-row';
-      const cardClass = result.correct ? 'attr-card attr-correct' : 'attr-card attr-wrong';
-      const t = LANG[currentLang] || LANG.en;
-      row.innerHTML = `<div class="guess-cards"><div class="${cardClass}"><span class="attr-label">${t.weapon}</span><span class="attr-value">${result.data}</span></div></div>`;
-      hintsEl.appendChild(row);
-      hideAutocomplete();
-
-      if (result.correct) {
-        endGame(true, Game.dailyAnswer, 'weapons');
-        return;
-      }
-
-      if (Game.guesses.length >= Game.maxGuesses) {
-        endGame(false, Game.dailyAnswer, 'weapons');
-        return;
-      }
-
-      input.value = '';
-      input.focus();
-    };
-
-    guessBtn.onclick = doGuess;
-    input.oninput = () => { selectedIdx = -1; showAutocomplete(); };
-    input.onfocus = () => { if (input.value.trim()) showAutocomplete(); };
-    input.onblur = () => setTimeout(hideAutocomplete, 150);
-    input.onkeydown = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (autocompleteEl.classList.contains('hidden') || selectedIdx < 0) doGuess();
-        else {
-          const item = autocompleteEl.querySelector(`.autocomplete-item:nth-child(${selectedIdx + 1})`);
-          if (item) { input.value = item.dataset.name; hideAutocomplete(); doGuess(); }
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const items = autocompleteEl.querySelectorAll('.autocomplete-item');
-        if (items.length) { selectedIdx = (selectedIdx + 1) % items.length; showAutocomplete(); }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        const items = autocompleteEl.querySelectorAll('.autocomplete-item');
-        if (items.length) { selectedIdx = (selectedIdx - 1 + items.length) % items.length; showAutocomplete(); }
-      } else if (e.key === 'Escape') hideAutocomplete();
-    };
-    setTimeout(() => {
-      input.focus();
-      input.removeAttribute('readonly');
-    }, 100);
-  }
 
   function endGame(won, answer, mode) {
-    const suffixMap = { operators: 'operator', weapons: 'weapon' };
+    const suffixMap = { operators: 'operator', emoji: 'emoji' };
     const suffix = suffixMap[mode] || mode;
     const resultEl = document.getElementById(`${suffix}-result`);
     const input = document.querySelector(`#${suffix}-input`);
@@ -458,16 +365,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (input) input.disabled = true;
     if (guessBtn) guessBtn.disabled = true;
 
-    Game.saveProgress(mode, mode === 'operators' ? Game.dailyAnswer : answer, Game.guesses.length, won);
+    Game.saveProgress(mode, mode === 'operators' || mode === 'emoji' ? Game.dailyAnswer : answer, Game.guesses.length, won);
 
     if (won) {
-      API.incrementPlayerCount().then(() => updatePlayerCount());
+      API.incrementPlayerCount(mode).then(() => updatePlayerCount());
     }
 
     const t = LANG[currentLang] || LANG.en;
+    const displayAnswer = typeof answer === 'object' ? Game.getDisplayName(answer, currentLang) : answer;
     resultEl.innerHTML = `
       <div class="result-title ${won ? 'win' : 'lose'}">${won ? t.correct : t.outOfGuesses}</div>
-      <div class="result-answer">${t.todaysAnswer} ${answer}</div>
+      <div class="result-answer">${t.todaysAnswer} ${displayAnswer}</div>
       <div class="result-stats">${t.guesses}: ${Game.guesses.length}${won ? '' : ` / ${Game.maxGuesses}`}</div>
     `;
     resultEl.className = `result-area ${won ? 'win' : 'lose'}`;
@@ -486,17 +394,13 @@ document.addEventListener('DOMContentLoaded', () => {
         items.push({ ...op, category: 'operators', type: 'operator' });
       });
     }
-    if (filter === 'all' || filter === 'weapons') {
-      GAME_DATA.weapons.forEach(w => {
-        items.push({ name: w, category: 'weapons', type: 'weapon' });
-      });
-    }
 
     grid.innerHTML = items.map(item => {
       const unlocked = archive[item.category]?.includes(item.name) || false;
+      const displayName = Game.getDisplayName(item, currentLang);
       return `
         <div class="archive-item ${unlocked ? 'unlocked' : 'locked'}">
-          ${item.name}
+          ${displayName}
         </div>
       `;
     }).join('');
@@ -510,8 +414,183 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // More Games placeholder
-  document.getElementById('more-games-btn').addEventListener('click', () => {
-    alert('More games coming soon!');
+  // Information button
+  document.getElementById('info-btn').addEventListener('click', () => {
+    document.getElementById('info-modal').classList.remove('hidden');
   });
+
+  document.getElementById('info-modal-close').addEventListener('click', () => {
+    document.getElementById('info-modal').classList.add('hidden');
+  });
+
+  document.getElementById('info-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('info-modal')) {
+      document.getElementById('info-modal').classList.add('hidden');
+    }
+  });
+
+  // Emoji Game
+  function initEmojiGame() {
+    const dailyCharacter = Game.getDailyEmojiCharacter();
+    
+    if (!dailyCharacter) {
+      alert('No characters available!');
+      showMainMenu();
+      return;
+    }
+
+    Game.dailyAnswer = dailyCharacter;
+    Game.guesses = [];
+    Game.hintIndex = 0;
+    Game.wrongAttempts = 0; // Счётчик неправильных попыток
+
+    const emojiDisplay = document.getElementById('emoji-display');
+    const emojiHint = document.getElementById('emoji-hint');
+    const emojiInput = document.getElementById('emoji-input');
+    const emojiResult = document.getElementById('emoji-result');
+    const hintsEl = document.getElementById('emoji-hints');
+    const revealedEl = document.getElementById('emoji-revealed-hints');
+    const autocompleteEl = document.getElementById('emoji-autocomplete');
+
+    // Показываем первый эмодзи
+    updateEmojiDisplay();
+    
+    emojiHint.textContent = `💡 Emojis will appear as you guess wrong (max 4)`;
+    emojiInput.value = '';
+    emojiInput.disabled = false;
+    emojiResult.classList.add('hidden');
+    hintsEl.innerHTML = '';
+    revealedEl.innerHTML = '';
+
+    function updateEmojiDisplay() {
+      const visibleEmojis = getVisibleEmojis(dailyCharacter, Game.wrongAttempts);
+      emojiDisplay.innerHTML = `<span class="emoji-text">${visibleEmojis}</span>`;
+    }
+
+    // Autocomplete
+    let selectedIdx = -1;
+    function showAutocomplete() {
+      const val = emojiInput.value.trim();
+      const suggestions = Game.getEmojiCharacterSuggestions(val, currentLang);
+      if (suggestions.length === 0) {
+        autocompleteEl.classList.add('hidden');
+        return;
+      }
+      autocompleteEl.innerHTML = suggestions.map((char, i) => {
+        const displayName = Game.getDisplayName(char, currentLang);
+        const img = typeof getOperatorImageUrl === 'function' ? getOperatorImageUrl(char.name) : null;
+        const imgHtml = img ? `<img class="autocomplete-portrait" src="${img}" alt="" loading="lazy" onerror="this.style.display='none'">` : '';
+        return `<div class="autocomplete-item ${i === selectedIdx ? 'selected' : ''}" data-name="${displayName}">${imgHtml}<span>${displayName}</span></div>`;
+      }).join('');
+      autocompleteEl.classList.remove('hidden');
+      autocompleteEl.querySelectorAll('.autocomplete-item').forEach((el) => {
+        el.onclick = () => { emojiInput.value = el.dataset.name; hideAutocomplete(); doGuess(); };
+      });
+    }
+    
+    function hideAutocomplete() {
+      autocompleteEl.classList.add('hidden');
+      autocompleteEl.innerHTML = '';
+      selectedIdx = -1;
+    }
+
+    const doGuess = () => {
+      const guess = emojiInput.value.trim();
+      if (!guess) return;
+
+      const normalized = Game.normalize(guess);
+      const correctNameEn = Game.normalize(dailyCharacter.name);
+      const correctNameRu = dailyCharacter.nameRu ? Game.normalize(dailyCharacter.nameRu) : null;
+      const correct = normalized === correctNameEn || (correctNameRu && normalized === correctNameRu);
+
+      if (!correct) {
+        Game.wrongAttempts++;
+        updateEmojiDisplay(); // Добавляем новый эмодзи
+      }
+
+      Game.guesses.push({ guess, correct });
+      renderEmojiGuess(guess, correct);
+      hideAutocomplete();
+
+      if (correct) {
+        endGame(true, dailyCharacter, 'emoji');
+        return;
+      }
+
+      if (Game.guesses.length >= Game.maxGuesses) {
+        endGame(false, dailyCharacter, 'emoji');
+        return;
+      }
+
+      emojiInput.value = '';
+      emojiInput.focus();
+    };
+
+    const hintBtn = document.getElementById('emoji-hint-btn');
+    hintBtn.onclick = () => {
+      if (Game.hintIndex === 0 && dailyCharacter.hint) {
+        const div = document.createElement('div');
+        div.className = 'revealed-hint';
+        div.textContent = `💡 Hint: ${dailyCharacter.hint}`;
+        revealedEl.appendChild(div);
+        Game.hintIndex++;
+      } else if (Game.hintIndex === 1) {
+        const div = document.createElement('div');
+        div.className = 'revealed-hint';
+        div.textContent = `🔤 First letter: ${dailyCharacter.name.charAt(0).toUpperCase()}`;
+        revealedEl.appendChild(div);
+        Game.hintIndex++;
+      } else if (Game.hintIndex === 2) {
+        const div = document.createElement('div');
+        div.className = 'revealed-hint';
+        div.textContent = `📏 Length: ${dailyCharacter.name.length} letters`;
+        revealedEl.appendChild(div);
+        Game.hintIndex++;
+        hintBtn.disabled = true;
+      }
+    };
+
+    const guessBtn = document.getElementById('emoji-guess-btn');
+    guessBtn.onclick = doGuess;
+    
+    emojiInput.oninput = () => { selectedIdx = -1; showAutocomplete(); };
+    emojiInput.onfocus = () => { if (emojiInput.value.trim()) showAutocomplete(); };
+    emojiInput.onblur = () => setTimeout(hideAutocomplete, 150);
+    emojiInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (autocompleteEl.classList.contains('hidden') || selectedIdx < 0) doGuess();
+        else {
+          const item = autocompleteEl.querySelector(`.autocomplete-item:nth-child(${selectedIdx + 1})`);
+          if (item) { emojiInput.value = item.dataset.name; hideAutocomplete(); doGuess(); }
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const items = autocompleteEl.querySelectorAll('.autocomplete-item');
+        if (items.length) { selectedIdx = (selectedIdx + 1) % items.length; showAutocomplete(); }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = autocompleteEl.querySelectorAll('.autocomplete-item');
+        if (items.length) { selectedIdx = (selectedIdx - 1 + items.length) % items.length; showAutocomplete(); }
+      } else if (e.key === 'Escape') hideAutocomplete();
+    };
+
+    setTimeout(() => { emojiInput.focus(); }, 100);
+  }
+
+  function renderEmojiGuess(guess, correct) {
+    const hintsEl = document.getElementById('emoji-hints');
+    const row = document.createElement('div');
+    row.className = 'guess-row';
+    const t = LANG[currentLang] || LANG.en;
+    
+    // Получаем иконку персонажа
+    const getImg = (name) => typeof getOperatorImageUrl === 'function' ? getOperatorImageUrl(name) : null;
+    const img = getImg(guess);
+    const imgHtml = img ? `<img class="attr-portrait" src="${img}" alt="${guess}" loading="lazy" onerror="this.style.display='none'">` : '';
+    
+    const cardClass = correct ? 'attr-card attr-correct attr-with-portrait' : 'attr-card attr-wrong attr-with-portrait';
+    row.innerHTML = `<div class="guess-cards"><div class="${cardClass}">${imgHtml}<span class="attr-label">Guess</span><span class="attr-value">${guess}</span></div></div>`;
+    hintsEl.appendChild(row);
+  }
 });

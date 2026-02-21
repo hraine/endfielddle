@@ -31,9 +31,9 @@ const ATTRIBUTE_IMAGES = {
   
   // Rarity stars
   rarity: {
-    4: "★★★★",
-    5: "★★★★★",
-    6: "★★★★★★"
+    4: "https://static.wikia.nocookie.net/genshin-impact/images/0/04/%D0%98%D0%BA%D0%BE%D0%BD%D0%BA%D0%B0_%D0%A0%D0%B5%D0%B4%D0%BA%D0%BE%D1%81%D1%82%D1%8C_1.png/revision/latest/scale-to-width-down/20?cb=20210226153416&path-prefix=ru",
+    5: "https://static.wikia.nocookie.net/genshin-impact/images/0/04/%D0%98%D0%BA%D0%BE%D0%BD%D0%BA%D0%B0_%D0%A0%D0%B5%D0%B4%D0%BA%D0%BE%D1%81%D1%82%D1%8C_1.png/revision/latest/scale-to-width-down/20?cb=20210226153416&path-prefix=ru",
+    6: "https://static.wikia.nocookie.net/genshin-impact/images/0/04/%D0%98%D0%BA%D0%BE%D0%BD%D0%BA%D0%B0_%D0%A0%D0%B5%D0%B4%D0%BA%D0%BE%D1%81%D1%82%D1%8C_1.png/revision/latest/scale-to-width-down/20?cb=20210226153416&path-prefix=ru"
   }
 };
 
